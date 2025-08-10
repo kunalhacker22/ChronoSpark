@@ -1,19 +1,38 @@
 import React from "react";
 import { Helmet } from "react-helmet-async";
 import { useNavigate, useParams } from "react-router-dom";
-import { getEventById, deleteEvent } from "@/utils/storage";
+import { supabase } from "@/integrations/supabase/client";
 import { CountdownCircle } from "@/components/CountdownCircle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import * as QRCode from "qrcode";
 import confetti from "canvas-confetti";
-
+import { EventItem } from "@/types/event";
 const EventDetail: React.FC = () => {
   const { id } = useParams();
   const nav = useNavigate();
-  const event = id ? getEventById(id) : undefined;
+  const [event, setEvent] = React.useState<EventItem | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [userId, setUserId] = React.useState<string | null>(null);
   const [qr, setQr] = React.useState<string>("");
   const firedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!id) { setLoading(false); return; }
+      const { data, error } = await supabase
+        .from("events")
+        .select("id, creator_id, title, description, date_time, image_url, is_public, category, created_at, follower_count")
+        .eq("id", id)
+        .maybeSingle();
+      if (!mounted) return;
+      if (!error && data) setEvent(data as unknown as EventItem);
+      setLoading(false);
+    })();
+    supabase.auth.getSession().then(({ data: { session } }) => setUserId(session?.user.id ?? null));
+    return () => { mounted = false; };
+  }, [id]);
 
   React.useEffect(() => {
     const url = `${window.location.origin}/event/${id}`;
@@ -38,6 +57,14 @@ const EventDetail: React.FC = () => {
     return () => clearInterval(idInt);
   }, [event]);
 
+  if (loading) {
+    return (
+      <main className="container py-10">
+        <p className="text-muted-foreground">Loading...</p>
+      </main>
+    );
+  }
+
   if (!event) {
     return (
       <main className="container py-10">
@@ -49,9 +76,9 @@ const EventDetail: React.FC = () => {
 
   const date = new Date(event.date_time);
 
-  function handleDelete() {
-    deleteEvent(event.id);
-    nav("/events");
+  async function handleDelete() {
+    const { error } = await supabase.from("events").delete().eq("id", event.id);
+    if (!error) nav("/events");
   }
 
   return (
@@ -75,7 +102,9 @@ const EventDetail: React.FC = () => {
             <div className="text-sm text-muted-foreground">{date.toLocaleString()}</div>
             <div className="flex gap-3">
               <Button variant="hero" onClick={() => window.print()}>Save as PDF</Button>
-              <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+              {userId === event.creator_id && (
+                <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -38,6 +38,7 @@ const Index = () => {
           <div className="mt-8 flex items-center justify-center gap-3">
             <Link to="/create"><Button variant="hero" size="lg">Create Event</Button></Link>
             <Link to="/feed"><Button variant="outline" size="lg">Explore Feed</Button></Link>
+            <Link to="/auth"><Button size="lg">Sign in</Button></Link>
           </div>
         </div>
       </section>

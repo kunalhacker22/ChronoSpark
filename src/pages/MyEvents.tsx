@@ -1,18 +1,30 @@
 import React from "react";
 import { Helmet } from "react-helmet-async";
 import { EventCard } from "@/components/EventCard";
-import { getMyEvents } from "@/utils/storage";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { EventItem } from "@/types/event";
 
 const MyEvents: React.FC = () => {
-  const [events, setEvents] = React.useState(() => getMyEvents());
+  const [events, setEvents] = React.useState<EventItem[]>([]);
 
   React.useEffect(() => {
-    const id = setInterval(() => setEvents(getMyEvents()), 1000);
-    return () => clearInterval(id);
+    let mounted = true;
+    (async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+      if (!userId) return;
+      const { data, error } = await supabase
+        .from("events")
+        .select("id, creator_id, title, description, date_time, image_url, is_public, category, created_at, follower_count")
+        .eq("creator_id", userId)
+        .order("date_time", { ascending: true });
+      if (!mounted) return;
+      if (!error && data) setEvents(data as unknown as EventItem[]);
+    })();
+    return () => { mounted = false; };
   }, []);
-
   return (
     <main className="container py-10">
       <Helmet>

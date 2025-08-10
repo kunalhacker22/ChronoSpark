@@ -8,9 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { createEvent } from "@/utils/storage";
-import { EventItem, EventCategory } from "@/types/event";
-
+import { supabase } from "@/integrations/supabase/client";
+import { EventCategory } from "@/types/event";
 const categories: EventCategory[] = ["Tech", "Music", "Sports", "General"];
 
 const CreateEvent: React.FC = () => {
@@ -18,7 +17,7 @@ const CreateEvent: React.FC = () => {
   const [isPublic, setIsPublic] = React.useState(true);
   const [category, setCategory] = React.useState<EventCategory>("General");
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
@@ -29,20 +28,33 @@ const CreateEvent: React.FC = () => {
 
     if (!title || !date_time) return;
 
-    const newEvent: EventItem = {
-      id: crypto.randomUUID(),
-      title,
-      description,
-      date_time,
-      image_url: image_url || undefined,
-      is_public: isPublic,
-      category,
-      created_at: new Date().toISOString(),
-      follower_count: 0,
-    };
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user.id;
+    if (!userId) {
+      nav("/auth");
+      return;
+    }
 
-    createEvent(newEvent);
-    nav(`/event/${newEvent.id}`);
+    const { data, error } = await supabase
+      .from("events")
+      .insert({
+        creator_id: userId,
+        title,
+        description: description || null,
+        date_time: new Date(date_time).toISOString(),
+        image_url: image_url || null,
+        is_public: isPublic,
+        category,
+      })
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    if (data?.id) nav(`/event/${data.id}`);
   }
 
   return (
